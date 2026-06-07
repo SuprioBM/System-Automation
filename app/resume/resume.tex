@@ -1,0 +1,147 @@
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.19in}
+\addtolength{\topmargin}{-.7in}
+\addtolength{\textheight}{1.4in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+\titleformat{\section}{
+\vspace{-4pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+
+\pdfgentounicode=1
+
+\newcommand{\resumeItem}[1]{
+\item\small{{#1 \vspace{-2pt}}}
+}
+
+\newcommand{\resumeSubheading}[4]{
+\vspace{-2pt}\item
+\begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+\textbf{#1} & \textbf{\small #2} \\
+\textit{\small#3} & \textit{\small #4} \\
+\end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+\item
+\begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}
+\small#1 & \textbf{\small #2}\\
+\end{tabular*}\vspace{-7pt}
+}
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\tiny$\bullet$}}$}
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+{\Huge \scshape Suprio Biswas Mugdha} \\ \vspace{2pt}
+
+\small 
+\href{tel:+8801812222020}{\faPhone\ +880 1812222020} $|$ 
+\href{https://supriobiswas.me}{\faGlobe\ supriobiswas.me} $|$ Dhaka, Bangladesh \\ \vspace{1pt}
+
+\small 
+\href{mailto:work@supriobiswas.me}{\faEnvelope\ work@supriobiswas.me} ~ 
+\href{https://linkedin.com/in/supriobiswas}{\faLinkedin\ linkedin.com/in/supriobiswas} ~ 
+\href{https://github.com/SuprioBM}{\faGithub\ github.com/SuprioBM} ~ 
+\href{https://x.com/suprio632}{\faTwitter\ x.com/suprio632}
+\vspace{-8pt}
+\end{center}
+
+%--------------EDUCATION----------
+\section{Education}
+\resumeSubHeadingListStart
+\resumeSubheading
+{BRAC University}{Oct.2022 -- Oct.2026 (Expected)}
+{Bachelor of Science in Computer Science and Engineering}{Dhaka, Bangladesh}
+\resumeSubHeadingListEnd
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+\resumeSubHeadingListStart
+
+\resumeSubheading
+{Full-Stack \& AI Developer}{2024 -- Present}
+{Independent Systems Engineer}{Remote}
+\resumeItemListStart
+\resumeItem{Designed and deployed production-grade full-stack SaaS applications and automation systems using Next.js, Node.js, PostgreSQL, and REST APIs with scalable system architecture and maintainable engineering practices.}
+\resumeItem{Built AI-powered backend systems using Gemini APIs and LLM pipelines, implementing structured prompt workflows, context-aware reasoning, and asynchronous data processing for real-world automation systems.}
+\resumeItemListEnd
+
+\resumeSubheading
+{Frontend Developer (Freelance Project)}{2024}
+{Japan-based Multi-Service Business Client}{Remote}
+\resumeItemListStart
+\resumeItem{Developed and delivered a multi-domain enterprise web platform for a Japan-based client integrating restaurant, construction, and consulting services into a unified responsive interface system.}
+
+\resumeItemListEnd
+
+\resumeSubheading
+{Web Developer (Freelance)}{2022 -- 2023}
+{Independent}{Remote}
+\resumeItemListStart
+\resumeItem{Built scalable and responsive web interfaces using component-driven architecture, improving usability, performance optimization, and cross-browser compatibility across multiple client projects.}
+\resumeItemListEnd
+
+\resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+\section{Featured AI \& Full-Stack Systems}
+{{FEATURED_PROJECTS}}
+
+%-----------UI / FRONTEND-----------
+\section{Product Design \& Frontend Interfaces}
+{{INSIGHT_PROJECTS}}
+
+%-----------SKILLS-----------
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+\small{
+\item{
+\textbf{Frontend Architecture}{: React, Next.js, TypeScript, Tailwind CSS, JavaScript (ES6+), HTML5, CSS3, Responsive UI Design} \\
+\textbf{Backend \& Distributed Systems}{: Node.js, Express.js, PostgreSQL, MongoDB, REST APIs, JWT Authentication, Webhooks, System Design} \\
+\textbf{AI \& Machine Learning Systems}{: OpenAI APIs, LLM Pipelines, RAG Systems, Prompt Engineering, AI Agents, Context Engineering} \\
+\textbf{Infrastructure \& DevOps}{: Git, GitHub, Vercel, Render, Docker, CI/CD Pipelines, Deployment Automation, Cloud Workflows} \\
+}
+}
+\end{itemize}
+
+\end{document}

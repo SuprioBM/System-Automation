@@ -4,7 +4,7 @@ from app.core.config import GEMINI_API_KEY
 
 from app.utils.output_parser import parse_ai_response
 from app.utils.output_validator import validate_analysis
-from app.prompt.v1 import analysis_prompt
+from app.prompt.analysis import analysis_prompt
 
 
 client = genai.Client(api_key=GEMINI_API_KEY)
