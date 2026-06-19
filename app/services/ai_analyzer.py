@@ -1,20 +1,12 @@
 from google import genai
-
 from app.core.config import GEMINI_API_KEY
-
 from app.utils.output_parser import parse_ai_response
 from app.utils.output_validator import validate_analysis
-from app.prompt.analysis import analysis_prompt
-
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-
-async def analyze_repo(context: dict):
-
-    prompt = analysis_prompt(context)
-
+async def run_llm(prompt: str, validate: bool = False):
     try:
         print("🧠 Sending request to Gemini...")
 
@@ -31,18 +23,17 @@ async def analyze_repo(context: dict):
 
         parsed = parse_ai_response(response.text)
 
-        validated = validate_analysis(parsed)
-
-        print("✅ Gemini output validated")
+        # optional validation (only for structured outputs like GitHub analysis)
+        if validate:
+            parsed = validate_analysis(parsed).model_dump()
 
         return {
             "success": True,
-            "data": validated.model_dump()
+            "data": parsed
         }
 
     except Exception as e:
-
-        print("❌ AI ANALYSIS FAILED")
+        print("❌ LLM CALL FAILED")
         print(str(e))
 
         return {

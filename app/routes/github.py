@@ -2,12 +2,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.services.github_service import get_repo_details
-from app.services.ai_analyzer import analyze_repo
+from app.services.ai_analyzer import run_llm
 from app.utils.trigger import should_trigger
 from app.utils.extract_commit import extract_commit_message
 from app.utils.extract_repoName import extract_repo_name
 from app.utils.update_stage import update_stage
 from app.utils.context_builder import build_repo_context
+from app.prompt.analysis import analysis_prompt
 
 router = APIRouter()
 
@@ -134,7 +135,7 @@ async def github_webhook(request: Request):
         # ==================================================
         try:
 
-            analysis = await analyze_repo(context)
+            analysis = await run_llm(analysis_prompt(context), validate=True)
             if not analysis["success"]:
                 update_stage(pipeline_status, "gemini", False, analysis["message"])
                 return {

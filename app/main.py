@@ -1,13 +1,10 @@
 from fastapi import FastAPI
-from app.routes.github import router as github_router
-from app.routes.test import router as test_resume
-
+from app.routes.router_config import register_routers
 
 app = FastAPI()
 
-app.include_router(github_router, prefix="/github")
-app.include_router(test_resume)
 
+register_routers(app)
 
 @app.get("/")
 def health():
