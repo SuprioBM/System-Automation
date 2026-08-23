@@ -16,13 +16,26 @@ from app.services.pollinations_service import generate_image
 
 @node("generate_artifacts")
 def generate_artifacts(state: dict) -> dict:
-    selected = state.get("selected_actions", [])
+    approval_state = state.get("approval_state") or {}
+    existing_outputs = dict(state.get("generated_outputs") or {})
+
+    if approval_state:
+        # Regeneration pass (a human clicked "request changes" on one
+        # artifact type): only redo the type(s) actually flagged.
+        # Artifact types that are already approved/rejected/still-pending
+        # must not be regenerated or re-sent -- that would silently
+        # re-litigate a decision the human already made (or re-spam a
+        # pending one with a duplicate draft).
+        selected = [k for k, v in approval_state.items() if v.get("status") == "changes_requested"]
+    else:
+        selected = state.get("selected_actions", [])
+
     if not selected:
-        return {"current_stage": "generated", "generated_outputs": {}}
+        return {"current_stage": "generated", "generated_outputs": existing_outputs, "_regenerated_types": []}
 
     project = Project.model_validate(state["project_data"])
     feedback = (state.get("approval_feedback") or {}).get("_last_feedback")
-    outputs: dict = {}
+    outputs: dict = dict(existing_outputs)
 
     copy: GeneratedCopy | None = None
     if "resume" in selected or "linkedin" in selected:
@@ -58,4 +71,4 @@ def generate_artifacts(state: dict) -> dict:
                       workflow_id=state.get("workflow_id"))
         outputs["linkedin"] = {"post": copy.linkedin_post, "angle": copy.linkedin_angle, "image_url": image_url}
 
-    return {"current_stage": "generated", "generated_outputs": outputs}
+    return {"current_stage": "generated", "generated_outputs": outputs, "_regenerated_types": selected}

@@ -72,6 +72,7 @@ class WorkflowState(TypedDict, total=False):
     # Artifact generation
     generated_outputs: dict[str, Any]  # {resume: {...}, linkedin: {...}, portfolio: {...}}
     artifacts: dict[str, Any]  # {resume: artifact_id, linkedin_post: artifact_id, ...} + versions
+    _regenerated_types: list[str]  # which artifact type(s) this generate_artifacts pass actually (re)made
     validation_results: dict[str, Any]
 
     # Human-in-the-loop

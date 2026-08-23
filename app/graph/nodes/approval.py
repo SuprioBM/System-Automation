@@ -44,9 +44,20 @@ def request_discord_approval(state: dict) -> dict:
     outputs = state.get("generated_outputs", {})
     validation = state.get("validation_results", {})
     workflow_id, run_id = state["workflow_id"], state["run_id"]
-    approval_state: dict = {}
+    # Carry forward whatever's already decided/pending for artifact types
+    # that were NOT part of this pass -- only the freshly (re)generated
+    # types below get a new draft + new Discord message. Re-sending a
+    # message for an already-approved/rejected artifact would silently
+    # re-litigate a decision the human already made.
+    approval_state: dict = dict(state.get("approval_state") or {})
+    to_send = state.get("_regenerated_types")
+    if to_send is None:
+        to_send = list(outputs.keys())
 
-    for artifact_type, content in outputs.items():
+    for artifact_type in to_send:
+        content = outputs.get(artifact_type)
+        if content is None:
+            continue
         result = validation.get(artifact_type, {})
         if not result.get("passed"):
             continue
