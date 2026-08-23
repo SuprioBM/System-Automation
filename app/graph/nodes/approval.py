@@ -86,6 +86,10 @@ def request_discord_approval(state: dict) -> dict:
 @node("await_approval")
 def await_approval(state: dict) -> dict:
     pending = [k for k, v in state.get("approval_state", {}).items() if v["status"] == "pending"]
+    if state.get("workflow_id"):
+        # Recorded before interrupt() raises, since it never returns normally
+        # here -- the workflow is durably paused, not failed.
+        registry_service.update_workflow_run(state["workflow_id"], status="awaiting_approval")
     decision = interrupt({"workflow_id": state["workflow_id"], "pending": pending})
     feedback_state = dict(state.get("approval_feedback") or {})
     feedback_state["_incoming"] = decision

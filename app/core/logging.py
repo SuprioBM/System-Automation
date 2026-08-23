@@ -48,6 +48,17 @@ def _configure_root() -> None:
         return
     from app.core.config import settings
 
+    # Windows consoles/redirected-file streams default to cp1252, which can't
+    # encode most non-ASCII characters (em dashes, curly quotes, non-breaking
+    # hyphens, emoji). That silently breaks logging.StreamHandler.emit() --
+    # the record is dropped and only a "--- Logging error ---" stub is
+    # printed, hiding the real message. Force UTF-8 on stdout if possible.
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(ContextFormatter())
     root = logging.getLogger("devsync")

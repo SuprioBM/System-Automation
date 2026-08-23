@@ -9,6 +9,8 @@ import functools
 from datetime import datetime, timezone
 from typing import Callable
 
+from langgraph.errors import GraphInterrupt
+
 from app.core.errors import DevSyncError, ExternalServiceError
 from app.core.logging import get_logger, log_error, log_event
 from app.services import registry_service
@@ -40,6 +42,13 @@ def node(name: str):
                         pass  # observability update failure must not abort the run
                 log_event(logger, 20, f"node done: {name}", workflow_id=workflow_id, node=name)
                 return result
+            except GraphInterrupt:
+                # LangGraph's own human-in-the-loop pause signal (raised by
+                # interrupt()), not a failure -- re-raise immediately without
+                # error logging or marking the workflow failed. LangGraph
+                # itself handles this at the graph.invoke() level to pause
+                # the run cleanly; the job that triggered it still succeeds.
+                raise
             except Exception as e:
                 service = getattr(e, "service", None) if isinstance(e, ExternalServiceError) else None
                 operation = getattr(e, "operation", None) if isinstance(e, ExternalServiceError) else None

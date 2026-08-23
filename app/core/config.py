@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # Groq
     GROQ_API_KEY: str | None = None
-    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_MODEL: str = "qwen/qwen3.6-27b"
 
     # Embeddings
     EMBEDDING_PROVIDER: str = "fastembed"

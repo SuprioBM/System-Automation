@@ -55,12 +55,32 @@ credentials required.
 
 ## What's been verified live in this environment
 
-Redis Cloud connectivity, Groq structured-output calls (default model is
-`openai/gpt-oss-120b` — `llama-3.3-70b-versatile` is not available on this
-API key's account), local fastembed embeddings (384-d, matches the pgvector
-schema), Pollinations image generation, and a full slot-based résumé render
-+ remote YtoTech compile producing a real PDF. Supabase-dependent paths are
-implemented and unit-tested but not live-tested — they need the service-role
-key and DB URL above.
+A full real GitHub push → webhook → LangGraph pipeline run, all the way
+through `score_project` (repository fetched via the GitHub App, analyzed by
+Groq, embedded into pgvector, scored against existing portfolio projects),
+checkpointed after every node in Supabase Postgres. Also verified
+individually: Redis Cloud connectivity, local fastembed embeddings (384-d,
+matches the pgvector schema), Pollinations image generation, LinkedIn OAuth
+token validity, and a full slot-based résumé render + remote YtoTech compile
+producing a real PDF.
+
+**Default Groq model is `qwen/qwen3.6-27b`**, not `llama-3.3-70b-versatile`
+(unavailable on this API key's account) and not `openai/gpt-oss-*` (Groq's
+gpt-oss models have a tool-name mismatch bug with LangChain's structured
+tool-calling — the model generates a correct result but Groq's API rejects
+its own tool-name echo; reproducible, not transient — Qwen has no such
+issue across all four of this app's structured-output schemas).
+
+**Known Windows-specific fixes applied while testing on this machine:**
+RQ's default `Worker` and its `UnixSignalDeathPenalty` job-timeout mechanism
+both require POSIX (`os.fork()` / `SIGALRM`), so the worker uses
+`SimpleWorker` with a `TimerDeathPenalty` override (see
+[app/workers/worker.py](app/workers/worker.py)). The shared Redis client
+must NOT set `decode_responses=True` — RQ stores pickled binary job payloads
+in Redis, and force-decoding as UTF-8 corrupts them
+([app/core/redis_client.py](app/core/redis_client.py)). The logger
+reconfigures stdout to UTF-8 on startup, since Windows consoles default to
+cp1252 and silently drop any log line with a non-ASCII character
+([app/core/logging.py](app/core/logging.py)).
 
 _Live end-to-end DevSync pipeline test — triggered 2026-08-23T23:14:07Z._

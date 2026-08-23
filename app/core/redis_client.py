@@ -15,10 +15,14 @@ WORKFLOW_QUEUE_NAME = "devsync-workflows"
 
 
 def get_redis() -> redis.Redis:
+    """decode_responses is deliberately NOT set: RQ stores pickled (binary)
+    job payloads in Redis, and force-decoding every response as UTF-8
+    corrupts that binary data (UnicodeDecodeError on dequeue). Callers that
+    want strings (e.g. a raw GET/SET) should .decode() explicitly."""
     global _client
     if _client is None:
         url = require("REDIS_URL")
-        _client = redis.from_url(url, decode_responses=True, socket_connect_timeout=5, socket_timeout=10)
+        _client = redis.from_url(url, socket_connect_timeout=5, socket_timeout=10)
     return _client
 
 
