@@ -84,3 +84,5 @@ cp1252 and silently drop any log line with a non-ASCII character
 ([app/core/logging.py](app/core/logging.py)).
 
 _Live end-to-end DevSync pipeline test — triggered 2026-08-23T23:14:07Z._
+
+_Re-test after clearing the duplicate portfolio entry._
