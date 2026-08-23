@@ -1,208 +1,92 @@
-from fastapi import APIRouter, Request
+"""GitHub App webhook receiver. Thin and fast on purpose: verify signature,
+check idempotency, enqueue -- the actual AI workflow always runs in the
+worker (via LangGraph), never synchronously in this request handler.
+"""
+from __future__ import annotations
+
+import json
+import uuid
+
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
-from app.services.github_service import get_repo_details
-from app.services.ai_analyzer import run_llm
-from app.utils.trigger import should_trigger
+from app.core.errors import ConfigurationError
+from app.core.logging import get_logger, log_error
+from app.services import github_app, registry_service
 from app.utils.extract_commit import extract_commit_message
 from app.utils.extract_repoName import extract_repo_name
-from app.utils.update_stage import update_stage
-from app.utils.context_builder import build_repo_context
-from app.prompt.analysis import analysis_prompt
+from app.workers.queue import enqueue_new_workflow
 
 router = APIRouter()
+logger = get_logger("github_webhook")
 
 
 @router.post("/webhook")
-async def github_webhook(request: Request):
+async def github_webhook(
+    request: Request,
+    x_hub_signature_256: str | None = Header(default=None),
+    x_github_delivery: str | None = Header(default=None),
+    x_github_event: str | None = Header(default=None),
+):
+    body = await request.body()
 
-    # Fresh status object for every request
-    pipeline_status = {
-        "webhook": {"success": False, "message": None},
-        "github_fetch": {"success": False, "message": None},
-        "readme_fetch": {"success": False, "message": None},
-        "gemini": {"success": False, "message": None},
-        "save": {"success": False, "message": None}
+    try:
+        valid = github_app.verify_webhook_signature(body, x_hub_signature_256)
+    except ConfigurationError as e:
+        log_error(logger, "webhook signature check misconfigured", exc=e, operation="verify_webhook_signature")
+        return JSONResponse(status_code=500, content={"status": "error", "reason": str(e)})
+
+    if not valid:
+        log_error(logger, "webhook signature verification failed", exc=None,
+                  operation="verify_webhook_signature", delivery_id=x_github_delivery)
+        return JSONResponse(status_code=401, content={"status": "error", "reason": "invalid signature"})
+
+    try:
+        payload = json.loads(body)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"status": "error", "reason": "invalid JSON", "error": str(e)})
+
+    if x_github_event != "push":
+        return {"status": "ignored", "reason": f"event type '{x_github_event}' is not handled"}
+
+    commit_message = extract_commit_message(payload)
+    repository = extract_repo_name(payload)
+    commit_sha = (payload.get("head_commit") or {}).get("id", "")
+    installation_id = (payload.get("installation") or {}).get("id")
+    pusher = (payload.get("pusher") or {}).get("name") or (payload.get("sender") or {}).get("login") or ""
+
+    if not repository or not commit_sha:
+        return {"status": "error", "reason": "payload missing repository or commit"}
+
+    if not github_app.is_final_commit(commit_message):
+        return {"status": "ignored", "reason": "not a DevSync final/publish commit"}
+
+    event_id = x_github_delivery or f"{repository}:{commit_sha}"
+    try:
+        if registry_service.is_duplicate_event(event_id):
+            return {"status": "ignored", "reason": "duplicate delivery", "event_id": event_id}
+
+        workflow_id, run_id = str(uuid.uuid4()), str(uuid.uuid4())
+        registry_service.record_event(event_id, x_github_delivery, "github", workflow_id)
+        registry_service.create_workflow_run(workflow_id, run_id, event_id, repository, commit_sha)
+    except Exception as e:
+        log_error(logger, "idempotency/registry bookkeeping failed", exc=e, service="supabase",
+                  operation="create_workflow_run", repository=repository, commit=commit_sha)
+        return JSONResponse(status_code=502, content={"status": "error", "reason": "registry unavailable"})
+
+    initial_state = {
+        "workflow_id": workflow_id, "run_id": run_id, "event_id": event_id,
+        "repository": repository, "commit": commit_sha, "commit_message": commit_message,
+        "user": pusher, "installation_id": installation_id, "retry_count": 0,
+        "raw_event": {"delivery_id": x_github_delivery, "event": x_github_event},
     }
 
     try:
+        enqueue_new_workflow(initial_state)
+    except Exception as e:
+        log_error(logger, "failed to enqueue workflow", exc=e, service="redis", operation="enqueue_new_workflow",
+                  workflow_id=workflow_id)
+        registry_service.update_workflow_run(workflow_id, status="failed")
+        return JSONResponse(status_code=502, content={"status": "error", "reason": "queue unavailable"})
 
-        # ==================================================
-        # 1. RECEIVE PAYLOAD
-        # ==================================================
-        try:
-            payload = await request.json()
-
-            update_stage(
-                pipeline_status,
-                "webhook",
-                True,
-                "Payload received"
-            )
-
-        except Exception as e:
-            update_stage(
-                pipeline_status,
-                "webhook",
-                False,
-                str(e)
-            )
-
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "message": "Invalid JSON payload",
-                    "error": str(e)
-                }
-            )
-
-        print("📦 GitHub Payload received")
-
-        # ==================================================
-        # 2. EXTRACT DATA
-        # ==================================================
-        commit_message = extract_commit_message(payload)
-        repo_name = extract_repo_name(payload)
-
-        print("Commit:", commit_message)
-        print("Repo:", repo_name)
-
-        if not commit_message:
-            return {
-                "status": "ignored",
-                "reason": "empty commit message"
-            }
-
-        if not repo_name:
-            return {
-                "status": "error",
-                "reason": "repo not found"
-            }
-
-        # ==================================================
-        # 3. TRIGGER CHECK
-        # ==================================================
-        if not should_trigger(commit_message):
-            return {
-                "status": "ignored",
-                "reason": "publish:true not found",
-                "commit": commit_message
-            }
-
-        # ==================================================
-        # 4. FETCH REPO DATA
-        # ==================================================
-        repo_data = get_repo_details(repo_name)
-
-        if "error" in repo_data:
-
-            update_stage(
-                pipeline_status,
-                "github_fetch",
-                False,
-                str(repo_data)
-            )
-
-            return {
-                "status": "error",
-                "reason": "github fetch failed",
-                "details": repo_data
-            }
-
-        update_stage(
-            pipeline_status,
-            "github_fetch",
-            True,
-            f"Fetched {repo_name}"
-        )
-        context = build_repo_context(repo_data)
-
-        # ==================================================
-        # 5. README FETCH
-        # ==================================================
-        # Placeholder for future implementation
-
-        update_stage(
-            pipeline_status,
-            "readme_fetch",
-            True,
-            "Skipped (not implemented yet)"
-        )
-
-        # ==================================================
-        # 6. AI ANALYSIS
-        # ==================================================
-        try:
-
-            analysis = await run_llm(analysis_prompt(context), validate=True)
-            if not analysis["success"]:
-                update_stage(pipeline_status, "gemini", False, analysis["message"])
-                return {
-                    "status": "error",
-                    "stage": "gemini",
-                    "details": analysis
-    }
-
-            analysis = analysis["data"]
-
-            update_stage(
-                pipeline_status,
-                "gemini",
-                True,
-                "Analysis completed"
-            )
-
-        except Exception as e:
-
-            update_stage(
-                pipeline_status,
-                "gemini",
-                False,
-                str(e)
-            )
-
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "reason": "AI analysis failed",
-                    "error": str(e)
-                }
-            )
-
-        # ==================================================
-        # 7. SAVE STAGE
-        # ==================================================
-        # Placeholder until DB storage exists
-
-        update_stage(
-            pipeline_status,
-            "save",
-            True,
-            "Skipped (not implemented yet)"
-        )
-
-        # ==================================================
-        # 8. SUCCESS RESPONSE
-        # ==================================================
-        return {
-            "status": "processed",
-            "repo": repo_name,
-            "analysis": analysis
-        }
-
-    finally:
-
-        print("\n====================")
-        print("PIPELINE SUMMARY")
-        print("====================")
-
-        for stage, info in pipeline_status.items():
-
-            icon = "✅" if info["success"] else "❌"
-
-            print(
-                f"{icon} {stage}: "
-                f"{info['message']}"
-            )
+    return {"status": "accepted", "workflow_id": workflow_id, "run_id": run_id}

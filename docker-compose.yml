@@ -1,0 +1,34 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file: .env
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+
+  discord-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.discord-bot
+    env_file: .env
+    restart: unless-stopped
+
+# Redis and Supabase are external managed services (Redis Cloud, Supabase) for
+# this deployment -- REDIS_URL / SUPABASE_* in .env point at them directly.
+# Uncomment below to run a local Redis instead for offline development:
+#
+# redis:
+#   image: redis:7-alpine
+#   ports:
+#     - "6379:6379"
