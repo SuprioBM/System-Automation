@@ -62,3 +62,5 @@ schema), Pollinations image generation, and a full slot-based résumé render
 + remote YtoTech compile producing a real PDF. Supabase-dependent paths are
 implemented and unit-tested but not live-tested — they need the service-role
 key and DB URL above.
+
+_Live end-to-end DevSync pipeline test — triggered 2026-08-23T23:14:07Z._
