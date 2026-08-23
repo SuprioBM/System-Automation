@@ -26,7 +26,15 @@ _RETRYABLE_MESSAGE_MARKERS = ("rate limit", "429", "timeout", "connection", "503
 
 def _model(temperature: float = 0.0) -> ChatGroq:
     require("GROQ_API_KEY")
-    return ChatGroq(model=settings.GROQ_MODEL, api_key=settings.GROQ_API_KEY, temperature=temperature)
+    # max_tokens defaults to None in langchain-groq, which omits the param
+    # entirely and leaves Groq's own (fairly low) server-side default in
+    # effect. For structured-output tool calls on a many-field schema, that
+    # truncates the tool call mid-generation -- Groq then rejects it as
+    # "Failed to call a function" since the truncated JSON/XML never closes.
+    # Kept modest (not e.g. 8192): this account has an 8000 tokens-per-minute
+    # cap on GROQ_MODEL, and max_tokens reserves against that budget whether
+    # or not the response actually uses it all.
+    return ChatGroq(model=settings.GROQ_MODEL, api_key=settings.GROQ_API_KEY, temperature=temperature, max_tokens=3500)
 
 
 def _is_retryable(exc: BaseException) -> bool:

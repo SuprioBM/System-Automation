@@ -72,6 +72,13 @@ def finalize_workflow(state: dict) -> dict:
         status = "failed"
 
     if state.get("workflow_id"):
-        registry_service.update_workflow_run(state["workflow_id"], status=status, current_stage="finalized")
+        fields = {"status": status, "current_stage": "finalized"}
+        if status != "failed":
+            # Clear any error_state left over from an earlier failed node in
+            # this same run that a later retry/resume then got past --
+            # otherwise a workflow that succeeded on retry still shows the
+            # stale failure from its first attempt forever.
+            fields["error_state"] = None
+        registry_service.update_workflow_run(state["workflow_id"], **fields)
 
     return {"current_stage": "published" if status == "completed" else "rejected" if status == "rejected" else "failed"}

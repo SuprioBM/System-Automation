@@ -19,7 +19,12 @@ _INJECTION_PATTERNS = [
 ]
 _COMPILED = [re.compile(p, re.IGNORECASE) for p in _INJECTION_PATTERNS]
 
-MAX_UNTRUSTED_CHARS = 12_000
+# Kept small deliberately: this Groq account has an 8000 tokens-per-minute
+# cap on the configured model, which is a hard per-request ceiling too (a
+# single request asking for more than that can never fit, regardless of
+# pacing). A large README easily blows that budget once combined with the
+# system prompt and reserved output tokens.
+MAX_UNTRUSTED_CHARS = 2_500
 
 
 def sanitize_untrusted(text: str | None, *, max_chars: int = MAX_UNTRUSTED_CHARS) -> str:
