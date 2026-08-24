@@ -59,7 +59,13 @@ def generate_artifacts(state: dict) -> dict:
         # stack line and an empty bullet list forever. Only do this for a
         # project that was actually just inserted/replaced (has a real id).
         if project.category == "featured" and project.id:
-            project.resume_bullets = copy.resume_bullets
+            # Featured Projects shows exactly one bullet per project. The
+            # prompt asks for one, but this is enforced here too rather than
+            # trusted -- only ever applies to this newly inserted/replaced
+            # project; every other featured project's existing (already
+            # correct) bullets are untouched, since only this project's row
+            # is written.
+            project.resume_bullets = copy.resume_bullets[:1]
             project.linkedin_angle = copy.linkedin_angle
             project_service.upsert_project(project)
 

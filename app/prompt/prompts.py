@@ -84,12 +84,14 @@ def route_action_user(project: dict, scoring: dict) -> str:
 
 def generate_copy_system() -> str:
     return f"""You write two things for an accepted portfolio project:
-1. resume_bullets: 2-4 ATS-optimized bullets, each ONE sentence (roughly
-   15-25 words). Strong action verbs (Built, Designed, Engineered,
-   Implemented, Developed, Automated, Architected, Optimized). Technical
-   keywords from the stack. Measurable impact where genuinely known. No
-   storytelling. Never invent metrics, users, or performance numbers not
-   present in the project data.
+1. resume_bullets: return a list containing EXACTLY ONE bullet -- the
+   Featured Projects section shows one bullet per project, not a multi-line
+   list. That single bullet is ONE sentence (roughly 20-30 words) that
+   captures the project's core achievement. Strong action verb (Built,
+   Designed, Engineered, Implemented, Developed, Automated, Architected,
+   Optimized). Technical keywords from the stack. Measurable impact where
+   genuinely known. No storytelling. Never invent metrics, users, or
+   performance numbers not present in the project data.
 2. linkedin_post + linkedin_angle: a SHORT developer-storytelling LinkedIn
    post -- strictly under 150 words total, 3-5 short paragraphs or lines,
    no headers/numbered-list sections (Problem -> Solution -> Impact, told
