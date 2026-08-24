@@ -15,13 +15,19 @@ from app.models.decisions import ArtifactValidation
 from app.models.project import Project
 from app.services import latex_slots
 from app.services.latex_compiler import get_latex_compiler
-from app.services.project_service import FEATURED_LIMIT, INSIGHT_LIMIT
+from app.services.project_service import FEATURED_LIMIT
 from app.utils.latex_escape import latex_escape
 
 logger = get_logger("resume_service")
 
 TEMPLATE_PATH = "app/resume/resume.tex"
 BUCKET = "resumes"
+# Résumé template slot count for the "insight"-category section -- distinct
+# from project_service's auto-mutation policy (spec §44: only "featured" is
+# auto-added/replaced in the projects table/portfolio; insight projects are
+# never auto-persisted there, so this section stays empty unless someone
+# explicitly adds an insight-category project some other way).
+INSIGHT_SLOT_COUNT = 6
 
 
 def load_template() -> str:
@@ -54,7 +60,7 @@ def render_tex(base_tex: str, featured: list[Project], insight: list[Project]) -
     for i in range(1, FEATURED_LIMIT + 1):
         content = _featured_slot_content(featured[i - 1]) if i <= len(featured) else ""
         tex = latex_slots.set_slot(tex, "featured", i, content)
-    for i in range(1, INSIGHT_LIMIT + 1):
+    for i in range(1, INSIGHT_SLOT_COUNT + 1):
         content = _insight_slot_content(insight[i - 1]) if i <= len(insight) else ""
         tex = latex_slots.set_slot(tex, "insight", i, content)
     return tex

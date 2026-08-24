@@ -61,10 +61,18 @@ def score_project(state: dict) -> dict:
     pd = state["project_data"]
     project = Project.model_validate(pd)
 
-    if project.category == "ignore":
+    if project.category != project_service.AUTO_MUTABLE_CATEGORY:
+        # "ignore", and "insight" (spec §44: only Featured Projects may be
+        # automatically added/replaced -- Insight Projects is a locked
+        # portfolio section). Skip the LLM call entirely; there's nothing
+        # for it to score against, since this category never auto-persists.
         return {
             "current_stage": "scored",
-            "scores": {"verdict": "REJECT", "score": 0, "reasoning": "classified as ignore", "action": "ignored"},
+            "scores": {
+                "verdict": "REJECT", "score": 0,
+                "reasoning": f"category '{project.category}' is not auto-mutable (only 'featured' is)",
+                "action": "not_auto_mutable_category",
+            },
             "candidate_projects": [],
         }
 

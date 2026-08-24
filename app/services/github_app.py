@@ -28,8 +28,16 @@ _RETRYABLE = (requests.ConnectionError, requests.Timeout)
 # In-memory installation-token cache: installation_id -> (token, expires_at_epoch)
 _token_cache: dict[int, tuple[str, float]] = {}
 
+# Deliberately permissive: real usage showed people writing this half a
+# dozen different ways ("DevSync : Publish", "DevSync-Publish: true" mid-line
+# after other text, etc.). Requiring an exact trailer-on-its-own-line format
+# meant every real attempt failed silently (correctly ignored, but not what
+# anyone intended). "devsync" is distinctive enough that requiring it and
+# "publish" to both appear (in either order, anywhere in the message) is
+# still an unambiguous, deliberate signal -- not something any ordinary
+# commit message would contain by accident.
 FINAL_COMMIT_PATTERN = re.compile(
-    r"^\s*devsync-publish\s*:\s*true\s*$|\[devsync:publish\]", re.IGNORECASE | re.MULTILINE
+    r"devsync.*publish|publish.*devsync|\[devsync:publish\]", re.IGNORECASE | re.DOTALL
 )
 
 

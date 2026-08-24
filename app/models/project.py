@@ -7,6 +7,10 @@ from pydantic import BaseModel, Field
 
 Category = Literal["featured", "insight", "ignore"]
 CompletionStatus = Literal["prototype", "in_progress", "complete", "production"]
+# §48: lifecycle status, distinct from category. "active" = currently
+# featured/displayed; "archived" = replaced by a stronger project but kept
+# for history/RAG; "rejected" = scored but never added.
+ProjectStatus = Literal["active", "archived", "rejected"]
 
 
 class Project(BaseModel):
@@ -29,6 +33,7 @@ class Project(BaseModel):
     impact: str = ""
     completion_status: CompletionStatus = "in_progress"
     category: Category = "ignore"
+    status: ProjectStatus = "active"
     score: float = 0.0
     resume_bullets: list[str] = Field(default_factory=list)
     linkedin_angle: str = ""

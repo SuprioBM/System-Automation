@@ -40,6 +40,14 @@ def test_malformed_signature_header_is_rejected():
     ("release notes\n\ndevsync-publish: TRUE", True),
     ("quick note about [devsync:publish] syntax in docs", True),
     ("", False),
+    # Real formatting variations that tripped up actual users -- deliberately
+    # permissive matching (requiring only "devsync" and "publish" to both
+    # appear, in either order) is what makes these work.
+    ("DevSync : Publish", True),
+    ("DevSync: Publish", True),
+    ("devsync test DevSync-Publish: true", True),
+    ("publish the devsync changes", True),
+    ("fix: publish endpoint bug", False),  # "publish" alone, no "devsync" -- must not trigger
 ])
 def test_final_commit_detection(message, expected):
     assert github_app.is_final_commit(message) is expected

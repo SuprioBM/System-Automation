@@ -20,7 +20,7 @@ def _decision(verdict="ADD", score=80.0, replace_slug=None) -> ScoringDecision:
 def no_network(monkeypatch):
     saved = {}
     monkeypatch.setattr(project_service, "upsert_project", lambda p: (saved.setdefault("saved", p), p)[1])
-    monkeypatch.setattr(project_service, "delete_project", lambda pid: saved.setdefault("deleted", pid))
+    monkeypatch.setattr(project_service, "archive_project", lambda pid: saved.setdefault("archived", pid))
     return saved
 
 
@@ -43,7 +43,7 @@ def test_refuses_to_replace_a_stronger_existing_project():
     assert result["project"] is None
 
 
-def test_replaces_the_weakest_project_when_strictly_better():
+def test_replaces_the_weakest_project_when_strictly_better(no_network):
     weak = Project(owner="octocat", name="weak", slug="weak", category="featured", score=10, id="1")
     others = [Project(owner="octocat", name=f"p{i}", slug=f"p{i}", category="featured", score=90, id=str(i))
               for i in range(project_service.FEATURED_LIMIT - 1)]
@@ -51,9 +51,19 @@ def test_replaces_the_weakest_project_when_strictly_better():
     result = project_service.apply_scoring_decision(_project(score=0), _decision("REPLACE", 50), existing=existing)
     assert result["action"] == "replaced"
     assert result["removed"] == "weak"
+    # replaced, not deleted -- preserved for history/RAG (spec §48)
+    assert no_network["archived"] == "1"
 
 
 def test_ignore_category_never_mutates_storage(no_network):
     result = project_service.apply_scoring_decision(_project(category="ignore"), _decision("ADD", 80), existing=[])
-    assert result["action"] == "ignored"
+    assert result["action"] == "not_auto_mutable_category"
+    assert "saved" not in no_network
+
+
+def test_insight_category_never_auto_mutates_storage(no_network):
+    """Spec §44: Insight Projects is a locked portfolio section -- only
+    'featured' may be automatically added/replaced."""
+    result = project_service.apply_scoring_decision(_project(category="insight"), _decision("ADD", 95), existing=[])
+    assert result["action"] == "not_auto_mutable_category"
     assert "saved" not in no_network

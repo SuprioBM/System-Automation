@@ -84,14 +84,21 @@ def route_action_user(project: dict, scoring: dict) -> str:
 
 def generate_copy_system() -> str:
     return f"""You write two things for an accepted portfolio project:
-1. resume_bullets: ATS-optimized bullets. Strong action verbs (Built, Designed,
-   Engineered, Implemented, Developed, Automated, Architected, Optimized).
-   Technical keywords from the stack. Measurable impact where genuinely known.
-   No storytelling. Never invent metrics, users, or performance numbers not
+1. resume_bullets: 2-4 ATS-optimized bullets, each ONE sentence (roughly
+   15-25 words). Strong action verbs (Built, Designed, Engineered,
+   Implemented, Developed, Automated, Architected, Optimized). Technical
+   keywords from the stack. Measurable impact where genuinely known. No
+   storytelling. Never invent metrics, users, or performance numbers not
    present in the project data.
-2. linkedin_post + linkedin_angle: a developer-storytelling LinkedIn post
-   (Problem -> Solution -> Engineering approach -> Impact), confident and
-   narrative but never invented facts.
+2. linkedin_post + linkedin_angle: a SHORT developer-storytelling LinkedIn
+   post -- strictly under 150 words total, 3-5 short paragraphs or lines,
+   no headers/numbered-list sections (Problem -> Solution -> Impact, told
+   naturally, not as a bulleted feature list), confident and narrative but
+   never invented facts.
+Brevity is a hard requirement, not a suggestion: this output must fit a
+strict token budget, so do not write a long, multi-section post even if the
+project seems to warrant one -- pick the single most interesting angle and
+write only about that.
 {CANDIDATE_PROFILE}"""
 
 
