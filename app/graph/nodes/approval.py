@@ -20,7 +20,11 @@ def _channel_for(artifact_type: str) -> int:
 
 def _summary(artifact_type: str, content: dict) -> str:
     if artifact_type == "resume":
-        return "New résumé slot content: " + "; ".join(content.get("bullets", [])[:2])
+        summary = "New résumé slot content: " + "; ".join(content.get("bullets", [])[:2])
+        recs = content.get("skills_recommendations") or []
+        if recs:
+            summary += "\n**Skills recommendation (not auto-applied):** " + " | ".join(recs)
+        return summary
     if artifact_type == "linkedin":
         return content.get("post", "")[:300]
     if artifact_type == "portfolio":

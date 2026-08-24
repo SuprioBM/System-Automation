@@ -78,3 +78,20 @@ class ArtifactValidation(BaseModel):
     quality_checks: dict[str, bool] = Field(default_factory=dict)
     issues: list[str] = Field(default_factory=list)
     is_improvement_over_active: bool | None = None
+
+
+class SkillCategoryUpdate(BaseModel):
+    """One existing skill category's proposed resulting skill list. The
+    category name must exactly match an existing category -- deterministic
+    code (skills_service) rejects anything else rather than trusting it."""
+
+    category: str = Field(description="must exactly match one of the existing category names given, verbatim")
+    skills: list[str] = Field(description="the FULL resulting list for this category after merging/canonicalizing, not just the additions")
+    reasoning: str
+
+
+class SkillsUpdate(BaseModel):
+    """Output of the skills-update proposal. Only include categories whose
+    skill list should actually change; omit unaffected categories entirely."""
+
+    categories: list[SkillCategoryUpdate] = Field(default_factory=list)

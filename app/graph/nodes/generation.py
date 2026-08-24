@@ -9,7 +9,7 @@ logger = get_logger("generate_artifacts")
 from app.models.decisions import GeneratedCopy
 from app.models.project import Project
 from app.prompt.prompts import generate_copy_system, generate_copy_user
-from app.services import project_service, resume_service, storage_service
+from app.services import project_service, resume_service, skills_service, storage_service
 from app.services.groq_client import structured_call
 from app.services.pollinations_service import generate_image
 
@@ -61,7 +61,24 @@ def generate_artifacts(state: dict) -> dict:
         # automatically mutable.
         base_tex = resume_service.get_base_document()
         candidate_tex = resume_service.render_tex(base_tex, featured=featured, insight=None)
-        outputs["resume"] = {"tex": candidate_tex, "bullets": copy.resume_bullets}
+
+        # Skills is the one other section DevSync may touch, and only under
+        # strict constraints enforced in skills_service (no new categories,
+        # capped length, canonicalized dedup) -- everything else in the
+        # document stays exactly as get_base_document() provided it.
+        skills_recommendations: list[str] = []
+        try:
+            candidate_tex, skills_recommendations = skills_service.apply_to_tex(candidate_tex, project.model_dump())
+        except Exception as e:
+            # A failed skills proposal must not block the resume regeneration
+            # itself -- the featured-slot update is still valid without it.
+            log_error(logger, "skills update proposal failed, resume slots unaffected", exc=e,
+                      service="groq", operation="skills_update", workflow_id=state.get("workflow_id"))
+
+        outputs["resume"] = {
+            "tex": candidate_tex, "bullets": copy.resume_bullets,
+            "skills_recommendations": skills_recommendations,
+        }
 
     if "linkedin" in selected and copy:
         image_url = None
