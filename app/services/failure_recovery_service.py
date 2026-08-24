@@ -25,10 +25,15 @@ def _project_name(checkpoint_state: dict) -> str:
 
 
 def notify_failure(workflow_id: str, error: BaseException, checkpoint_state: dict) -> None:
-    """Send (or, if this workflow already has a failure message, update in
-    place per spec §17) the Discord failure notification with Resume/Cancel
-    buttons. Never raises -- a notification failure must not mask the
-    original workflow failure it's reporting on."""
+    """Always sends a FRESH Discord message with Resume/Cancel buttons --
+    including on a repeat ("failed again") failure. An edited message
+    doesn't re-notify Discord clients the way a new message does, and a
+    failure alert that can silently go unnoticed defeats the point of
+    having one. The previous failure message (if any) is edited to remove
+    its buttons and point at the new one, so stale buttons can't be
+    clicked, but the alert itself is always a new, visible message. Never
+    raises -- a notification failure must not mask the original workflow
+    failure it's reporting on."""
     try:
         run = registry_service.get_workflow_run(workflow_id) or {}
         failed_node = getattr(error, "devsync_failed_node", None) or run.get("current_node") or "unknown"
@@ -48,13 +53,14 @@ def notify_failure(workflow_id: str, error: BaseException, checkpoint_state: dic
         )
 
         if again and run.get("failure_message_id"):
-            discord_service.edit_message(
-                settings.discord_error_channel_id, run["failure_message_id"], content,
-                discord_service.workflow_action_components(workflow_id),
-            )
-            message_id = run["failure_message_id"]
-        else:
-            message_id = discord_service.send_failure_notification(content, workflow_id)
+            try:
+                discord_service.edit_message(
+                    settings.discord_error_channel_id, run["failure_message_id"],
+                    "*(superseded -- see the newer failure message below)*", components=[],
+                )
+            except Exception:
+                pass  # best-effort tidy-up; must not block sending the real new alert
+        message_id = discord_service.send_failure_notification(content, workflow_id)
 
         registry_service.update_workflow_run(workflow_id, failure_message_id=message_id)
     except Exception as e:
