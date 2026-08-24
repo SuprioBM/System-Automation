@@ -43,10 +43,12 @@ def _components(approval_id: str) -> list[dict]:
     }]
 
 
-@with_retries("discord", "send_approval_message", exceptions=(requests.ConnectionError, requests.Timeout))
-def send_approval_message(channel_id: int, content: str, approval_id: str,
-                           file_bytes: bytes | None = None, filename: str | None = None) -> str:
-    payload = {"content": content[:2000], "components": _components(approval_id)}
+@with_retries("discord", "send_message", exceptions=(requests.ConnectionError, requests.Timeout))
+def _send_message(channel_id: int, content: str, components: list[dict] | None = None,
+                   file_bytes: bytes | None = None, filename: str | None = None) -> str:
+    payload = {"content": content[:2000]}
+    if components:
+        payload["components"] = components
     if file_bytes and filename:
         res = requests.post(
             f"{DISCORD_API}/channels/{channel_id}/messages",
@@ -59,8 +61,22 @@ def send_approval_message(channel_id: int, content: str, approval_id: str,
         res = requests.post(f"{DISCORD_API}/channels/{channel_id}/messages", headers=_bot_headers(),
                              json=payload, timeout=15)
     if res.status_code >= 300:
-        raise ExternalServiceError("discord", "send_approval_message", res.text, status_code=res.status_code)
+        raise ExternalServiceError("discord", "send_message", res.text, status_code=res.status_code)
     return res.json()["id"]
+
+
+def send_approval_message(channel_id: int, content: str, approval_id: str,
+                           file_bytes: bytes | None = None, filename: str | None = None) -> str:
+    return _send_message(channel_id, content, _components(approval_id), file_bytes, filename)
+
+
+@with_retries("discord", "edit_message", exceptions=(requests.ConnectionError, requests.Timeout))
+def edit_message(channel_id: int, message_id: str, content: str, components: list[dict] | None = None) -> None:
+    payload = {"content": content[:2000], "components": components or []}
+    res = requests.patch(f"{DISCORD_API}/channels/{channel_id}/messages/{message_id}", headers=_bot_headers(),
+                          json=payload, timeout=15)
+    if res.status_code >= 300:
+        raise ExternalServiceError("discord", "edit_message", res.text, status_code=res.status_code)
 
 
 def _json(payload: dict) -> str:
@@ -80,6 +96,58 @@ def build_approval_content(*, workflow_id: str, artifact_type: str, what_changed
     if link:
         lines.append(f"**Artifact:** {link}")
     return "\n".join(lines)
+
+
+# ── Failure / recovery notifications ─────────────────────────────────────
+
+def workflow_action_components(workflow_id: str) -> list[dict]:
+    return [{
+        "type": 1,
+        "components": [
+            {"type": 2, "style": 3, "label": "🔄 Resume", "custom_id": f"devsync:wfresume:{workflow_id}"},
+            {"type": 2, "style": 4, "label": "❌ Cancel", "custom_id": f"devsync:wfcancel:{workflow_id}"},
+        ],
+    }]
+
+
+def build_failure_content(*, project_name: str, repository: str, workflow_id: str, failed_node: str,
+                           error_summary: str, attempts: int, completed_nodes: list[str],
+                           timestamp: str, again: bool = False) -> str:
+    checklist = "\n".join(f"✓ {n}" for n in completed_nodes) + (f"\n→ {failed_node} ← failed" if failed_node else "")
+    title = "🔴 DevSync Workflow Failed Again" if again else "🔴 DevSync Workflow Failed"
+    return (
+        f"**{title}**\n\n"
+        f"Project: {project_name}\n"
+        f"Repository: {repository}\n\n"
+        f"Workflow:\n`{workflow_id}`\n\n"
+        f"Failed Node:\n{failed_node}\n\n"
+        f"Error:\n{error_summary[:500]}\n\n"
+        f"Attempts:\n{attempts}\n\n"
+        f"Checkpoint:\n{checklist}\n\n"
+        f"Time:\n{timestamp}"
+    )
+
+
+def build_resuming_content(*, workflow_id: str, resume_from_node: str, last_checkpoint: str, triggered_by: str) -> str:
+    return (
+        f"**🔄 DevSync Workflow Resuming**\n\n"
+        f"Workflow:\n`{workflow_id}`\n\n"
+        f"Resuming from:\n{resume_from_node}\n\n"
+        f"Checkpoint:\n{last_checkpoint}\n\n"
+        f"Triggered by:\n{triggered_by}"
+    )
+
+
+def build_completed_content(*, workflow_id: str) -> str:
+    return f"**🟢 DevSync Workflow Completed**\n\nWorkflow:\n`{workflow_id}`"
+
+
+def build_cancelled_content(*, workflow_id: str, cancelled_by: str) -> str:
+    return f"**⚪ DevSync Workflow Cancelled**\n\nWorkflow:\n`{workflow_id}`\n\nCancelled by:\n{cancelled_by}"
+
+
+def send_failure_notification(content: str, workflow_id: str) -> str:
+    return _send_message(settings.discord_error_channel_id, content, workflow_action_components(workflow_id))
 
 
 # ── Gateway bot (receiving side) ────────────────────────────────────────
@@ -118,21 +186,51 @@ class DiscordBot:
         custom_id = interaction.data.get("custom_id", "")
         if not custom_id.startswith("devsync:"):
             return
-        _, action, approval_id = custom_id.split(":", 2)
+        _, action, target_id = custom_id.split(":", 2)
 
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
 
+        if action in ("wfresume", "wfcancel"):
+            authorized = settings.discord_authorized_user_ids
+            if authorized and str(interaction.user.id) not in authorized:
+                await interaction.followup.send("You're not authorized to control DevSync workflows.", ephemeral=True)
+                logger.warning(f"unauthorized workflow-action attempt by discord user {interaction.user.id}")
+                return
+            result = await self._workflow_action_callback(
+                target_id, "resume" if action == "wfresume" else "cancel", interaction.user.id
+            )
+            await interaction.followup.send(result, ephemeral=True)
+            return
+
         if action == "changes":
-            self.feedback_sessions[interaction.user.id] = {"approval_id": approval_id}
+            self.feedback_sessions[interaction.user.id] = {"approval_id": target_id}
             await interaction.followup.send("Send your requested changes as a chat message now.", ephemeral=True)
             return
 
         status = {"approve": "approved", "reject": "rejected"}.get(action)
         if not status:
             return
-        result = await self._callback(approval_id, status, None)
+        result = await self._callback(target_id, status, None)
         await interaction.followup.send(result, ephemeral=True)
+
+    async def _workflow_action_callback(self, workflow_id: str, action: str, discord_user_id: int) -> str:
+        import asyncio
+        try:
+            res = await asyncio.to_thread(
+                requests.post,
+                f"{settings.APP_BASE_URL}/discord/workflow-action",
+                json={"workflow_id": workflow_id, "action": action, "discord_user_id": str(discord_user_id)},
+                headers={"X-DevSync-Secret": require("DISCORD_CALLBACK_SHARED_SECRET")},
+                timeout=30,
+            )
+            if res.status_code >= 300:
+                return f"Backend rejected the {action}: {res.text[:200]}"
+            return f"{action.capitalize()} accepted for `{workflow_id}`."
+        except Exception as e:
+            log_error(logger, "workflow-action callback failed", exc=e, service="devsync_backend",
+                      operation="workflow_action")
+            return "Failed to reach the backend -- see server logs."
 
     async def _callback(self, approval_id: str, status: str, feedback: str | None) -> str:
         import asyncio

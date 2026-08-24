@@ -35,3 +35,33 @@ def ping() -> bool:
 
 def get_queue(name: str = WORKFLOW_QUEUE_NAME) -> Queue:
     return Queue(name, connection=get_redis())
+
+
+# ── Lightweight coordination helpers ─────────────────────────────────────
+# Still just Redis's existing "queue/temporary coordination" role (spec §11):
+# nothing here is a durable source of truth -- the checkpoint remains in
+# Postgres and the failure record remains in workflow_runs.
+
+def acquire_claim(key: str, ttl_seconds: int = 60) -> bool:
+    """Atomic claim so only one execution can own a workflow recovery at a
+    time (spec §9: duplicate Resume clicks must not race). True if this
+    caller won the claim."""
+    return bool(get_redis().set(key, "1", nx=True, ex=ttl_seconds))
+
+
+def release_claim(key: str) -> None:
+    get_redis().delete(key)
+
+
+def incr_attempt_counter(key: str, ttl_seconds: int = 600) -> int:
+    """Best-effort per-(workflow,node) attempt counter for observability
+    logging -- LangGraph's own RetryPolicy doesn't expose its internal
+    attempt number to the node function, so this is tracked alongside it."""
+    r = get_redis()
+    n = r.incr(key)
+    r.expire(key, ttl_seconds)
+    return int(n)
+
+
+def reset_attempt_counter(key: str) -> None:
+    get_redis().delete(key)

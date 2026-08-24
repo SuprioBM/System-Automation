@@ -64,3 +64,42 @@ class RetryExhausted(DevSyncError):
         self.attempts = attempts
         self.last_error = last_error
         super().__init__(f"{operation} failed after {attempts} attempts")
+
+
+# ── Transient vs. permanent classification (spec §4/§5) ─────────────────
+# Used as LangGraph's per-node RetryPolicy.retry_on: True means "worth an
+# automatic retry with backoff", False means "fail the node immediately,
+# don't waste attempts on something that will never succeed by retrying."
+_TRANSIENT_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
+_TRANSIENT_MESSAGE_MARKERS = (
+    "timeout", "timed out", "connection", "rate limit", "temporarily unavailable",
+    "429", "503", "502", "500", "econnreset", "econnrefused",
+)
+# These are always permanent regardless of message content -- retrying a bad
+# config, a validation failure, or a deterministic business rejection can
+# never succeed by trying again.
+_ALWAYS_PERMANENT = (ConfigurationError, ValidationFailure, BusinessRejection,
+                     StaleApprovalError, IdempotencyConflict)
+
+
+def is_transient_error(exc: BaseException) -> bool:
+    if isinstance(exc, _ALWAYS_PERMANENT):
+        return False
+
+    if isinstance(exc, ExternalServiceError):
+        if exc.status_code is not None:
+            if exc.status_code in _TRANSIENT_STATUS_CODES:
+                return True
+            if 400 <= exc.status_code < 500:
+                return False  # other 4xx (400/401/403/404/...) -- permanent
+        # no status code available -- fall through to message sniffing below
+
+    try:
+        import requests
+        if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+            return True
+    except ImportError:
+        pass
+
+    message = str(exc).lower()
+    return any(marker in message for marker in _TRANSIENT_MESSAGE_MARKERS)

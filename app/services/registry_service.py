@@ -73,6 +73,38 @@ def update_workflow_run(workflow_id: str, **fields) -> None:
     get_supabase().table("workflow_runs").update(fields).eq("workflow_id", workflow_id).execute()
 
 
+# ── Checkpoint-based failure recovery lifecycle (spec: Checkpoint-Based
+# Failure Recovery). Reuses workflow_runs -- no parallel workflow-state
+# table. Status values: running -> failed (+recoverable) -> running (on
+# resume) -> completed/rejected, or failed -> cancelled. ──────────────────
+
+def mark_workflow_failed(workflow_id: str, *, failed_node: str, error: BaseException, attempt_count: int) -> None:
+    """The graph run has genuinely stopped with no more automatic recovery
+    pending (all of LangGraph's own per-node retries exhausted, or a
+    non-retryable error). Preserves the checkpoint implicitly -- this only
+    touches workflow_runs, never the checkpoint tables."""
+    service = getattr(error, "service", None)
+    operation = getattr(error, "operation", None)
+    status_code = getattr(error, "status_code", None)
+    update_workflow_run(
+        workflow_id, status="failed", recoverable=True, failed_node=failed_node,
+        attempt_count=attempt_count,
+        error_state={
+            "node": failed_node, "service": service, "operation": operation,
+            "error_type": type(error).__name__, "message": str(error)[:2000],
+            "status_code": status_code, "retry_number": attempt_count,
+        },
+    )
+
+
+def mark_workflow_resuming(workflow_id: str) -> None:
+    update_workflow_run(workflow_id, status="running", recoverable=False)
+
+
+def mark_workflow_cancelled(workflow_id: str) -> None:
+    update_workflow_run(workflow_id, status="cancelled", recoverable=False)
+
+
 # ── Artifacts ────────────────────────────────────────────────────────────
 
 def create_artifact(workflow_id: str, run_id: str, artifact_type: str, content: dict,

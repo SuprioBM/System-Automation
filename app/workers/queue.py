@@ -11,3 +11,7 @@ def enqueue_new_workflow(initial_state: dict):
 
 def enqueue_resume(workflow_id: str, decision_payload: dict):
     return get_queue().enqueue("app.workers.tasks.run_resume", workflow_id, decision_payload, job_timeout=JOB_TIMEOUT)
+
+
+def enqueue_recovery(workflow_id: str):
+    return get_queue().enqueue("app.workers.tasks.run_recovery", workflow_id, job_timeout=JOB_TIMEOUT)

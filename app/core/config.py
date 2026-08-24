@@ -51,7 +51,15 @@ class Settings(BaseSettings):
     DISCORD_BOT_TOKEN: str | None = None
     DISCORD_RESUME_CHANNEL_ID: str | None = None
     DISCORD_LINKEDIN_CHANNEL_ID: str | None = None
+    DISCORD_ERROR_CHANNEL_ID: str | None = None
     DISCORD_CALLBACK_SHARED_SECRET: str | None = None
+    # Comma-separated Discord user IDs allowed to Resume/Cancel a failed
+    # workflow. If unset, resume/cancel is allowed for anyone who can see
+    # the error channel (logged loudly as unrestricted -- see §15).
+    DISCORD_AUTHORIZED_USER_IDS: str | None = None
+
+    # Failure recovery (checkpoint-based)
+    NODE_MAX_RETRIES: int = 3
 
     # LinkedIn
     LINKEDIN_CLIENT_ID: str | None = None
@@ -81,6 +89,16 @@ class Settings(BaseSettings):
     def discord_linkedin_channel_id(self) -> int:
         return _as_int("DISCORD_LINKEDIN_CHANNEL_ID", self.DISCORD_LINKEDIN_CHANNEL_ID)
 
+    @property
+    def discord_error_channel_id(self) -> int:
+        return _as_int("DISCORD_ERROR_CHANNEL_ID", self.DISCORD_ERROR_CHANNEL_ID)
+
+    @property
+    def discord_authorized_user_ids(self) -> set[str]:
+        if not self.DISCORD_AUTHORIZED_USER_IDS:
+            return set()
+        return {x.strip() for x in self.DISCORD_AUTHORIZED_USER_IDS.split(",") if x.strip()}
+
 
 def _as_int(name: str, value: str | None) -> int:
     if not value:
@@ -108,12 +126,15 @@ REQUIRED_FOR_API = [
 REQUIRED_FOR_WORKER = REQUIRED_FOR_API + [
     "GROQ_API_KEY",
     "SUPABASE_DB_URL",
+    "DISCORD_BOT_TOKEN",       # worker sends approval + failure notifications directly via REST
+    "DISCORD_ERROR_CHANNEL_ID",
 ]
 
 REQUIRED_FOR_DISCORD_BOT = [
     "DISCORD_BOT_TOKEN",
     "DISCORD_RESUME_CHANNEL_ID",
     "DISCORD_LINKEDIN_CHANNEL_ID",
+    "DISCORD_ERROR_CHANNEL_ID",
     "DISCORD_CALLBACK_SHARED_SECRET",
     "APP_BASE_URL",
 ]

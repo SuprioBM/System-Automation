@@ -5,7 +5,10 @@ crashed worker resumes from the last completed node rather than restarting.
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import RetryPolicy
 
+from app.core.config import settings
+from app.core.errors import is_transient_error
 from app.graph.nodes.analysis import analyze_repository, retrieve_relevant_knowledge, score_project, structure_project_knowledge
 from app.graph.nodes.approval import MAX_REGENERATIONS, apply_approval_decision, await_approval, request_discord_approval
 from app.graph.nodes.generation import generate_artifacts
@@ -47,10 +50,25 @@ def _after_decision(state: dict) -> str:
 def build_graph(checkpointer):
     builder = StateGraph(WorkflowState)
 
+    # Automatic retry for transient failures (spec §4), reusing LangGraph's
+    # own per-node retry mechanism rather than a second hand-rolled one.
+    # Permanent errors (is_transient_error -> False) raise immediately with
+    # no wasted attempts (spec §5). await_approval's GraphInterrupt doesn't
+    # match either classification, so it's never retried by this policy --
+    # no special-casing needed, it's raised straight through as always.
+    retry_policy = RetryPolicy(
+        max_attempts=settings.NODE_MAX_RETRIES,
+        initial_interval=1.0,
+        backoff_factor=2.0,
+        max_interval=30.0,
+        jitter=True,
+        retry_on=is_transient_error,
+    )
+
     for fn in (receive_event, load_repository_context, analyze_repository, structure_project_knowledge,
                retrieve_relevant_knowledge, score_project, route_action, generate_artifacts, validate_artifacts,
                request_discord_approval, await_approval, apply_approval_decision, publish, finalize_workflow):
-        builder.add_node(fn.__name__, fn)
+        builder.add_node(fn.__name__, fn, retry=retry_policy)
 
     builder.add_edge(START, "receive_event")
     builder.add_edge("receive_event", "load_repository_context")
