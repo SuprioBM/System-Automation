@@ -23,7 +23,11 @@ def validate_artifacts(state: dict) -> dict:
         results["portfolio"] = {"passed": True, "content_checks": {"project_present": True}, "issues": []}
 
     if "resume" in to_validate and "resume" in outputs:
-        base_tex = resume_service.load_template()
+        # Must diff against the SAME base the candidate was built from
+        # (get_base_document(), not the blank template) -- otherwise the
+        # "only slots changed" check would wrongly flag the active résumé's
+        # own existing Insight Projects content as an unauthorized change.
+        base_tex = resume_service.get_base_document()
         pdf_bytes, validation = resume_service.compile_and_validate(outputs["resume"]["tex"], base_tex)
         if pdf_bytes:
             draft_url = storage_service.upload_bytes(

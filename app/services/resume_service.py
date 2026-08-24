@@ -55,15 +55,35 @@ def _insight_slot_content(p: Project) -> str:
     )
 
 
-def render_tex(base_tex: str, featured: list[Project], insight: list[Project]) -> str:
+def render_tex(base_tex: str, featured: list[Project] | None = None, insight: list[Project] | None = None) -> str:
+    """Fill slots from project lists. Pass None (not []) for a section to
+    leave its slots completely untouched -- an empty list means "render
+    this section as empty", None means "don't touch this section at all".
+    The DevSync automated pipeline only ever regenerates the Featured
+    section (see get_base_document()); the distinction matters."""
     tex = base_tex
-    for i in range(1, FEATURED_LIMIT + 1):
-        content = _featured_slot_content(featured[i - 1]) if i <= len(featured) else ""
-        tex = latex_slots.set_slot(tex, "featured", i, content)
-    for i in range(1, INSIGHT_SLOT_COUNT + 1):
-        content = _insight_slot_content(insight[i - 1]) if i <= len(insight) else ""
-        tex = latex_slots.set_slot(tex, "insight", i, content)
+    if featured is not None:
+        for i in range(1, FEATURED_LIMIT + 1):
+            content = _featured_slot_content(featured[i - 1]) if i <= len(featured) else ""
+            tex = latex_slots.set_slot(tex, "featured", i, content)
+    if insight is not None:
+        for i in range(1, INSIGHT_SLOT_COUNT + 1):
+            content = _insight_slot_content(insight[i - 1]) if i <= len(insight) else ""
+            tex = latex_slots.set_slot(tex, "insight", i, content)
     return tex
+
+
+def get_base_document() -> str:
+    """The reference document a new résumé candidate is built from and
+    diffed against. If a résumé has already been activated, its exact tex
+    is the base -- so regenerating only the Featured slots leaves every
+    other section (Insight Projects included) byte-for-byte untouched.
+    Only falls back to the blank template when no résumé has ever been
+    activated yet (nothing to preserve)."""
+    active = get_active_resume()
+    if active and active.get("tex_snapshot"):
+        return active["tex_snapshot"]
+    return load_template()
 
 
 def _page_count(pdf_bytes: bytes) -> int | None:

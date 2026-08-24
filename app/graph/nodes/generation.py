@@ -53,9 +53,14 @@ def generate_artifacts(state: dict) -> dict:
 
     if "resume" in selected and copy:
         featured = project_service.list_projects(project.owner, "featured")
-        insight = project_service.list_projects(project.owner, "insight")
-        base_tex = resume_service.load_template()
-        candidate_tex = resume_service.render_tex(base_tex, featured, insight)
+        # Build on top of whatever résumé is currently active (or the blank
+        # template if none is active yet) and touch ONLY the Featured
+        # slots -- insight=None leaves Insight Projects (and everything
+        # else) exactly as it already is. The automated pipeline never
+        # regenerates that section; per spec §44 only Featured Projects is
+        # automatically mutable.
+        base_tex = resume_service.get_base_document()
+        candidate_tex = resume_service.render_tex(base_tex, featured=featured, insight=None)
         outputs["resume"] = {"tex": candidate_tex, "bullets": copy.resume_bullets}
 
     if "linkedin" in selected and copy:

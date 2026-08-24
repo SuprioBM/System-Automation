@@ -30,9 +30,8 @@ async def preview_resume(owner: str):
         return JSONResponse(status_code=403, content={"status": "error", "reason": "preview is dev-only"})
 
     featured = project_service.list_projects(owner, "featured")
-    insight = project_service.list_projects(owner, "insight")
-    base_tex = resume_service.load_template()
-    candidate_tex = resume_service.render_tex(base_tex, featured, insight)
+    base_tex = resume_service.get_base_document()
+    candidate_tex = resume_service.render_tex(base_tex, featured=featured, insight=None)
 
     try:
         pdf_bytes, validation = resume_service.compile_and_validate(candidate_tex, base_tex)
